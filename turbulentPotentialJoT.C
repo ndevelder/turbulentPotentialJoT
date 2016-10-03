@@ -597,6 +597,19 @@ turbulentPotentialJoT::turbulentPotentialJoT
         mesh_,
         dimensionedScalar("epsHat", dimensionSet(0,0,-1,0,0,0,0), 1.0)
     ),
+    eHrC_
+    (
+        IOobject
+        (
+            "eHrC",
+            runTime_.timeName(),
+            mesh_,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        mesh_,
+        cEhR_*dimensionedScalar("eHrC", dimensionSet(0,1,0,0,0,0,0), 1.0)
+    ),
     kol_
     (
         IOobject
@@ -817,6 +830,71 @@ turbulentPotentialJoT::turbulentPotentialJoT
             IOobject::AUTO_WRITE
         ),
         (mag(psiReal() ^ vorticity_))
+    ),
+	phiPressureStrain
+    (
+        IOobject
+        (
+            "phiPressureStrain",
+            runTime_.timeName(),
+            mesh_,
+            IOobject::NO_READ,
+            IOobject::AUTO_WRITE
+        ),
+        mesh_,
+        dimensionedScalar("phiPressureStrain", dimensionSet(0,2,-3,0,0,0,0), 1.0)
+    ),
+    phiPressureDiff
+    (
+        IOobject
+        (
+            "phiPressureDiff",
+            runTime_.timeName(),
+            mesh_,
+            IOobject::NO_READ,
+            IOobject::AUTO_WRITE
+        ),
+        mesh_,
+        dimensionedScalar("phiPressureDiff", dimensionSet(0,2,-3,0,0,0,0), 1.0)
+    ),
+    phiDiss
+    (
+        IOobject
+        (
+            "phiDiss",
+            runTime_.timeName(),
+            mesh_,
+            IOobject::NO_READ,
+            IOobject::AUTO_WRITE
+        ),
+        mesh_,
+        dimensionedScalar("phiDiss", dimensionSet(0,2,-3,0,0,0,0), 1.0)
+    ),
+    phiViscDiff
+    (
+        IOobject
+        (
+            "phiViscDiff",
+            runTime_.timeName(),
+            mesh_,
+            IOobject::NO_READ,
+            IOobject::AUTO_WRITE
+        ),
+        mesh_,
+        dimensionedScalar("phiViscDiff", dimensionSet(0,2,-3,0,0,0,0), 1.0)
+    ),
+    phiTurbDiff
+    (
+        IOobject
+        (
+            "phiTurbDiff",
+            runTime_.timeName(),
+            mesh_,
+            IOobject::NO_READ,
+            IOobject::AUTO_WRITE
+        ),
+        mesh_,
+        dimensionedScalar("phiTurbDiff", dimensionSet(0,2,-3,0,0,0,0), 1.0)
     )
 {
 
@@ -971,13 +1049,13 @@ void turbulentPotentialJoT::correct()
     if(timeScaleEps_ == "epsilon" || timeScaleEps_ != "epsHat")
     {
         T = Ts();
-        bound(T, dimensionedScalar("minT", T.dimensions(), 1.0e-15));
+        bound(T, dimensionedScalar("minT", T.dimensions(), 1.0e-10));
     }
         
     if(timeScaleEps_ == "epsHat")
     {
         T = TsEh();
-        bound(T, dimensionedScalar("minT", T.dimensions(), 1.0e-15));
+        bound(T, dimensionedScalar("minT", T.dimensions(), 1.0e-10));
     }
         
 	
@@ -1014,6 +1092,8 @@ void turbulentPotentialJoT::correct()
     // Production
 	if(prodType_ == "seqn")
 	{
+		Info<< "Using s eqaution for production" << endl;
+		
 		// s equation
 		tmp<fvVectorMatrix> phisEqn
 		(
@@ -1040,6 +1120,8 @@ void turbulentPotentialJoT::correct()
 		tpProd_ = tppsi_ & vorticity_;
 		G = tpProd_;
 		
+		if(debugWrite_ == "true")
+		{
 		const volScalarField gradProd("gradProd",2.0*nut_*magSqr(symm(fvc::grad(U_))));
 		const volScalarField vortPsi("vPsi",mag(nut_*vorticity_.component(2)));
 		const volScalarField vortSqrProd("vortSqrProd",nut_*vorticity_ & vorticity_);
@@ -1059,6 +1141,7 @@ void turbulentPotentialJoT::correct()
 		Info<< "Psi Z: " << gSum(psiZ) << " RxyGrad: " << gSum(RxyGrad) << " RxyGradT: " << gSum(RxyGradT) << " vPsi: " << gSum(vortPsi)   <<endl;
 		Info<< "Tensor XY: " << tensor::XY << " Tensor YX: " << tensor::YX <<endl;
 		Info<< "nut sum: " << gSum(nut_) <<endl;
+		}
 	}
     
 
@@ -1066,26 +1149,32 @@ void turbulentPotentialJoT::correct()
 
 	
     // Epsilon-hat (Epsilon - Epsilon Wall)
+  
 	if(eqnEpsHat_ == "mod")
 	{
         epsHat_ = (epsilon_)/(k_ + cEhm_*nu()*mag(gradkSqrt_));
-        bound(epsHat_,dimensionedScalar("minEpsHat", epsHat_.dimensions(), 1.0e-15));
+        bound(epsHat_,dimensionedScalar("minEpsHat", epsHat_.dimensions(), 1.0e-10));
 	}
 	else if(eqnEpsHat_ == "dif")
 	{
         epsHat_ = (epsilon_ - 2.0*nu()*sqr(mag(gradkSqrt_)))/k_;
-        bound(epsHat_,dimensionedScalar("minEpsHat", epsHat_.dimensions(), 1.0e-15));
+        bound(epsHat_,dimensionedScalar("minEpsHat", epsHat_.dimensions(), 1.0e-10));
+	}
+	else if(eqnEpsHat_ == "eps")
+	{
+        epsHat_ = epsilon_/k_;
+        bound(epsHat_,dimensionedScalar("minEpsHat", epsHat_.dimensions(), 1.0e-10));
 	}
 	else if(eqnEpsHat_ == "rough")
 	{
-        epsHat_ = (epsilon_ - cEhR_*nu()*sqr(mag(gradkSqrt_)))/k_;
-        bound(epsHat_,dimensionedScalar("minEpsHat", epsHat_.dimensions(), 1.0e-15));
+        epsHat_ = epsilon_/k_;
+        bound(epsHat_,dimensionedScalar("minEpsHat", epsHat_.dimensions(), 1.0e-10));
 	}
 	else
 	{
         Info<< "No EpsHat Model Chosen" <<endl;
 	    epsHat_ = (epsilon_)/(k_ + cEhm_*nu()*mag(fvc::grad(kSqrt_)));
-	    bound(epsHat_,dimensionedScalar("minEpsHat", epsHat_.dimensions(), 1.0e-15));
+	    bound(epsHat_,dimensionedScalar("minEpsHat", epsHat_.dimensions(), 1.0e-10));
 	}
 
 	
@@ -1154,6 +1243,7 @@ void turbulentPotentialJoT::correct()
       - fvm::laplacian(DkEff(), k_)
      ==
         G
+      + fvc::laplacian(nu()/cMu_,tpphi_)
       - fvm::Sp(epsilon_/k_,k_)
     );
 
@@ -1187,8 +1277,9 @@ void turbulentPotentialJoT::correct()
       - fvm::laplacian(DphiEff(), tpphi_)
       ==
       // Pressure Strain
-        cPphi_*nutFrac()*(1.0 - Alpha())*((2.0*k_/3.0) - tpphi_)*epsHat_
-      //+ fvm::SuSp( -0.06*((2.0*k_/(3.0*tpphi_)) - (tpphi_/tpphi_))*epsHat_,tpphi_ )	
+      // cPphi_*nutFrac()*(1.0 - Alpha())*((2.0*k_/3.0) - tpphi_)*epsHat_
+      //+ fvm::SuSp( -0.06*((2.0*k_/(3.0*tpphi_)) - (tpphi_/tpphi_))*epsHat_,tpphi_ )
+      (0.5 + cPphi_*(2.0*Alpha() - 1.0)*nutFrac())*tpphi_*epsHat_
       + cP2_*GdK*tpphi_
       // Pressure diffusion
       + fvm::Sp(-1.0*(cP4_+ cP2_)*GdK,tpphi_) 
@@ -1208,6 +1299,14 @@ void turbulentPotentialJoT::correct()
     solve(tpphiEqn);
     bound(tpphi_,dimensionedScalar("minTpphi", tpphi_.dimensions(), 1.0e-15));
     }
+
+	// Phi output debug terms
+	phiPressureStrain = (0.5 + cPphi_*(2.0*Alpha() - 1.0)*nutFrac())*tpphi_*epsHat_ + cP2_*GdK*tpphi_;
+	phiPressureDiff = -1.0*(cP4_+ cP2_)*GdK*tpphi_ + (cP4_+ cP2_)*Alpha()*((tppsi_ & tppsi_)/((nut_*k_)*(1.0+cPw_/reTau())))*tpphi_;
+	phiDiss = -2.0*Alpha()*epsHat_*tpphi_ - gT2_*2.0*nu()*(gradPhiSqrt & gradPhiSqrt);
+	phiViscDiff = fvc::laplacian(nu(), tpphi_);
+	phiTurbDiff = fvc::laplacian(sigmaPhi_*nut_, tpphi_);
+
 
     gradTpphi_ = fvc::grad(tpphi_);
 
@@ -1235,7 +1334,8 @@ void turbulentPotentialJoT::correct()
         (1.0 - cP2_)*tpphi_*vorticity_
       - (2*Alpha() - cP2_)*psProd*tppsi_ 
       + cMu_*(2*Alpha() - 1.0)*tpphi_*vorticity_
-      - gT1_*2.0*(nu() + nut_)*(gradk_ & gradPsiOverK)     
+      - gT1_*2.0*(nu())*(gradk_ & gradPsiOverK) 
+      - gT3_*2.0*(nut_)*(gradk_ & gradPsiOverK)     
 	  + fvm::Sp(-1.0*(cP1_*nutFrac()*epsHat_*(1.0-Alpha())),tppsi_)   
       + fvm::Sp(-1.0*Alpha()*(epsilon_/k_),tppsi_)
       //+ fvm::Sp(-1.0*epsilon_/(k_*(1+cP3_*(nut_/nu()))),tppsi_)

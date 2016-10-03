@@ -141,6 +141,7 @@ class turbulentPotentialJoT
             volVectorField tppsi_;
             volTensorField uGrad_;
             volScalarField epsHat_;
+            volScalarField eHrC_;
 			volScalarField kol_;
 			volScalarField kSafe_;
 			volScalarField kSqrt_;
@@ -159,6 +160,11 @@ class turbulentPotentialJoT
 			volTensorField gradTppsi_;
 			volScalarField tpProdSqr_;
 			volScalarField tpProd3d_;
+			volScalarField phiPressureStrain;
+			volScalarField phiPressureDiff;
+			volScalarField phiDiss;
+			volScalarField phiViscDiff;
+			volScalarField phiTurbDiff;
 
 
     // Private member functions
